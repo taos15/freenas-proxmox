@@ -1,6 +1,17 @@
 # FreeNAS ZFS over iSCSI interface  [![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=TCLNEMBUYQUXN&source=url)
 
-## Thank you for all that have donated to the project
+## Currently trying JFrog for the repo. Just changing the Automation and making sure all works.<br/>I am currently testing an should have at least the repos up for production and testing. You will need to update your repos with the new location and gpg. I will have instructions on this page.
+
+## Also currently developing for TrueNAS-Core 13 to provide fixes to support all the [Free|True]NAS family.
+
+## Thank you for all that have recently donated to the project.
+    Daniel Most
+    Maksym Vasylenko
+    Alexander Finkhäuser - Reoccuring
+    Bjarte Kvamme - Reoccuring
+    Jonathan Schober - Reoccuring
+    
+## And thanks to all that have donated to the project in the past.
     Clevvi Technology
     Mark Elkins - Reoccuring
     Marc Hodler
@@ -29,6 +40,11 @@ On Proxmox 6
 apt reinstall pve-manager pve-docs libpve-storage-perl
 ```
 
+On Proxmox 7
+```bash
+apt reinstall pve-manager pve-docs libpve-storage-perl
+```
+## Changing in the near future.
 Issue the following to install the repo and get your Proxmox VE updating the FreeNAS patches automatically:
 ```bash
 wget http://repo.ksatechnologies.com/debian/pve/ksatechnologies-release.gpg -O /etc/apt/trusted.gpg.d/ksatechnologies-repo.gpg
@@ -71,7 +87,7 @@ This will place you back to a normal and unpatched Proxmox VE install.
 
 Please be aware that this plugin uses the FreeNAS APIs and NOT the ssh/scp interface like the other plugins use, but...
 
-You will still need to configure the SSH connector for listing the ZFS Pools because this is currently being done in a Proxmox module (ZFSPoolPlugin.pm). To configure this please follow the steps at https://pve.proxmox.com/wiki/Storage:_ZFS_over_iSCSI that have to do with SSH between Proxmox VE and FreeNAS. The code segment should start out �mkdir /etc/pve/priv/zfs�.
+You will still need to configure the SSH connector for listing the ZFS Pools because this is currently being done in a Proxmox module (ZFSPoolPlugin.pm). To configure this please follow the steps at https://pve.proxmox.com/wiki/Storage:_ZFS_over_iSCSI that have to do with SSH between Proxmox VE and FreeNAS. The code segment should start out `mkdir /etc/pve/priv/zfs`.
 
 1. Remember to follow the instructions mentioned above for the SSH keys.
 

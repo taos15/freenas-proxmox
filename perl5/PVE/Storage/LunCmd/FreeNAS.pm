@@ -27,6 +27,8 @@ my $runawayprevent = 0;                    # Recursion prevention variable
 my $freenas_api_version = "v1.0";          # Default to v1.0 of the API's
 my $freenas_api_methods = undef;           # API Methods Nested HASH Ref
 my $freenas_api_variables = undef;         # API Variable Nested HASH Ref
+my $truenas_version = undef;
+my $truenas_release_type = "Production";
 
 # FreeNAS/TrueNAS (CORE) API Versioning HashRef Matrix
 my $freenas_api_version_matrix = {
@@ -197,52 +199,45 @@ sub run_list_view {
 
 #
 #
-#
+# Optimized
 sub run_list_lu {
     my ($scfg, $timeout, $method, $result_value_type, @params) = @_;
     my $object = $params[0];
-    syslog("info", (caller(0))[3] . " : called with (method=$method; result_value_type=$result_value_type; object=$object)");
-
     my $result = undef;
     my $luns = freenas_list_lu($scfg);
-    foreach my $lun (@$luns) {
-        syslog("info", (caller(0))[3] . " : Verifing '$lun->{$freenas_api_variables->{'extentpath'}}' and '$object'");
-        if ($dev_prefix . $lun->{$freenas_api_variables->{'extentpath'}} eq $object) {
-            $result = $result_value_type eq "lun-id" ? $lun->{$freenas_api_variables->{'lunid'}} : $dev_prefix . $lun->{$freenas_api_variables->{'extentpath'}};
-            syslog("info",(caller(0))[3] . "($object) '$result_value_type' found $result");
-            last;
-        }
-    }
-    if(!defined($result)) {
-        syslog("info", (caller(0))[3] . "($object) : $result_value_type : lun not found");
-    }
+    syslog("info", (caller(0))[3] . " : called with (method: '$method'; result_value_type: '$result_value_type'; param[0]: '$object')");
 
+    $object =~ s/^\Q$dev_prefix//;
+    syslog("info", (caller(0))[3] . " : TrueNAS object to find: '$object'");
+    if (defined($luns->{$object})) {
+        my $lu_object = $luns->{$object};
+        $result = $result_value_type eq "lun-id" ? $lu_object->{$freenas_api_variables->{'lunid'}} : $dev_prefix . $lu_object->{$freenas_api_variables->{'extentpath'}};
+        syslog("info",(caller(0))[3] . " '$object' with key '$result_value_type' found with value: '$result'");
+    } else {
+        syslog("info", (caller(0))[3] . " '$object' with key '$result_value_type' was not found");
+    }
     return $result;
 }
 
 #
 #
-#
+# Optimzed
 sub run_list_extent {
     my ($scfg, $timeout, $method, @params) = @_;
     my $object = $params[0];
-
-    syslog("info", (caller(0))[3] . " : called with (method=$method; object=$object)");
-
+    syslog("info", (caller(0))[3] . " : called with (method: '$method'; params[0]: '$object')");
     my $result = undef;
     my $luns = freenas_list_lu($scfg);
-    foreach my $lun (@$luns) {
-        syslog("info", (caller(0))[3] . " : Verifing '$lun->{$freenas_api_variables->{'extentpath'}}' and '$object'");
-        if ($dev_prefix . $lun->{$freenas_api_variables->{'extentpath'}} eq $object) {
-            $result = $lun->{$freenas_api_variables->{'extentnaa'}};
-            syslog("info","FreeNAS::list_extent($object): naa found $result");
-            last;
-        }
-    }
-    if (!defined($result)) {
-        syslog("info","FreeNAS::list_extent($object): naa not found");
-    }
 
+    $object =~ s/^\Q$dev_prefix//;
+    syslog("info", (caller(0))[3] . " TrueNAS object to find: '$object'");
+    if (defined($luns->{$object})) {
+        my $lu_object = $luns->{$object};
+        $result = $lu_object->{$freenas_api_variables->{'extentnaa'}};
+        syslog("info",(caller(0))[3] . " '$object' wtih key '$freenas_api_variables->{'extentnaa'}' found with value: '$result'");
+    } else {
+        syslog("info",(caller(0))[3] . " '$object' with key '$freenas_api_variables->{'extentnaa'}' was not found");
+    }
     return $result;
 }
 
@@ -280,24 +275,24 @@ sub run_create_lu {
 
 #
 #
-#
+# Optimzied
 sub run_delete_lu {
     my ($scfg, $timeout, $method, @params) = @_;
     my $lun_path  = $params[0];
 
-    syslog("info", (caller(0))[3] . " : called with (method=$method; param[0]=$lun_path)");
+    syslog("info", (caller(0))[3] . " : called with (method: '$method'; param[0]: '$lun_path')");
 
     my $luns      = freenas_list_lu($scfg);
     my $lun       = undef;
     my $link      = undef;
-    foreach my $item (@$luns) {
-       if($dev_prefix . $item->{ $freenas_api_variables->{'extentpath'}} eq $lun_path) {
-           $lun = $item;
-           last;
-       }
-    }
+    $lun_path =~ s/^\Q$dev_prefix//;
 
-    die "Unable to find the lun $lun_path for $scfg->{target}" if !defined($lun);
+    if (defined($luns->{$lun_path})) {
+        $lun = $luns->{$lun_path};
+        syslog("info",(caller(0))[3] . " lun: '$lun_path' found");
+    } else {
+        die "Unable to find the lun $lun_path for $scfg->{target}";
+    }
 
     my $target_id = freenas_get_targetid($scfg);
     die "Unable to find the target id for $scfg->{target}" if !defined($target_id);
@@ -353,24 +348,34 @@ sub freenas_api_connect {
         $freenas_server_list->{$apihost}->getUseragent()->ssl_opts(SSL_verify_mode => SSL_VERIFY_NONE);
     }
     # Check if the APIs are accessable via the selected host and scheme
-    my $code = $freenas_server_list->{$apihost}->request('GET', $apiping)->responseCode();
-    if ($code == 200) {                # Successful connection
-        syslog("info", (caller(0))[3] . " : REST connection successful to '" . $apihost . "' using the '" . $scheme . "' protocol");
-        $runawayprevent = 0;
-    } elsif ($runawayprevent > 1) {    # Make sure we are not recursion calling.
+    my $api_response = $freenas_server_list->{$apihost}->request('GET', $apiping);
+    my $code = $api_response->responseCode();
+    my $type = $api_response->responseHeader('Content-Type');
+    syslog("info", (caller(0))[3] . " : REST connection header Content-Type:'" . $type . "'");
+
+    # Make sure we are not recursion calling.
+    if ($runawayprevent > 1) {
         freenas_api_log_error($freenas_server_list->{$apihost});
         die "Loop recursion prevention";
-    } elsif ($code == 302) {           # A 302 from FreeNAS means it doesn't like v1.0 APIs.
+    # Successful connection
+    } elsif ($code == 200 && ($type =~ /^text\/plain/ || $type =~ /^application\/json/)) {
+        syslog("info", (caller(0))[3] . " : REST connection successful to '" . $apihost . "' using the '" . $scheme . "' protocol");
+        $runawayprevent = 0;
+    # A 302 or 200 with Content-Type not 'text/plain' from {True|Free}NAS means it doesn't like v1.0 APIs.
+    # So change to v2.0 APIs.
+    } elsif ($code == 302 || ($code == 200 && $type !~ /^text\/plain/)) {
         syslog("info", (caller(0))[3] . " : Changing to v2.0 API's");
         $runawayprevent++;
         $apiping =~ s/v1\.0/v2\.0/;
         freenas_api_connect($scfg);
-    } elsif ($code == 307) {           # A 307 from FreeNAS means rediect http to https.
+    # A 307 from FreeNAS means rediect http to https.
+    } elsif ($code == 307) {
         syslog("info", (caller(0))[3] . " : Redirecting to HTTPS protocol");
         $runawayprevent++;
         $scfg->{freenas_use_ssl} = 1;
         freenas_api_connect($scfg);
-    } else {                           # For now, any other code we fail.
+    # For now, any other code we fail.
+    } else {
         freenas_api_log_error($freenas_server_list->{$apihost});
         die "Unable to connect to the FreeNAS API service at '" . $apihost . "' using the '" . $scheme . "' protocol";
     }
@@ -395,17 +400,35 @@ sub freenas_api_check {
             $result = decode_json($freenas_rest_connection->responseContent());
         };
         if ($@) {
-            $result->{'fullversion'} = $freenas_rest_connection->responseContent();
-            $result->{'fullversion'} =~ s/^"//g;
+            $result = $freenas_rest_connection->responseContent();
+        } else {
+            $result = $freenas_rest_connection->responseContent();
         }
-        syslog("info", (caller(0))[3] . " : successful : Server version: " . $result->{'fullversion'});
-        $result->{'fullversion'} =~ s/^((?!\-\d).*)\-(\d+)\.(\d+)\-([A-Za-z]*)(?(?=\-)\-(\d*)\-(\d*)|(\d?)\.?(\d?))//;
-        $product_name = $1;
-        my $freenas_version = sprintf("%02d%02d%02d%02d", $2, $3 || 0, $7 || 0, $8 || 0);
-        syslog("info", (caller(0))[3] . " : ". $product_name . " Unformatted Version: " . $freenas_version);
-        if ($freenas_version >= 11030100) {
+        $result =~ s/"//g;
+        syslog("info", (caller(0))[3] . " : successful : Server version: " . $result);
+        if ($result =~ /^(TrueNAS|FreeNAS)-(\d+)\.(\d+)\-U(\d+)(?(?=\.)\.(\d+))$/) {
+            $product_name = $1;
+            $truenas_version = sprintf("%02d%02d%02d%02d", $2, $3 || 0, $4 || 0, $5 || 0);
+        } elsif ($result =~ /^(TrueNAS)-(\d+)\.(\d+)(?(?=\-U\d+)-U(\d+)|-\w+)(?(?=\.).(\d+))$/) {
+            $product_name = $1;
+            $truenas_version = sprintf("%02d%02d%02d%02d", $2, $3 || 0, $4 || 0, $6 || 0);
+            $truenas_release_type = $5 || "Production";
+        } elsif ($result =~ /^(TrueNAS-SCALE)-(\d+)\.(\d+)(?(?=\-)-(\w+))\.(\d+)(?(?=\.)\.(\d+))(?(?=\-)-(\d+))$/) {
+            $product_name = $1;
+            $truenas_version = sprintf("%02d%02d%02d%02d", $2, $3 || 0, $5 || 0, $7 || 0);
+            $truenas_release_type = $4 || "Production";
+        } else {
+            $product_name = "Unknown";
+            $truenas_release_type = "Unknown";
+            syslog("error", (caller(0))[3] . " : Could not parse the version of TrueNAS.");
+        }
+        syslog("info", (caller(0))[3] . " : ". $product_name . " Unformatted Version: " . $truenas_version);
+        if ($truenas_version >= 11030100) {
             $freenas_api_version = "v2.0";
             $dev_prefix = "/dev/";
+        }
+        if ($truenas_release_type ne "Production") {
+            syslog("warn", (caller(0))[3] . " : The '" . $product_name . "' release type of '" . $truenas_release_type . "' may not worked due to unsupported changes.");
         }
     } else {
         syslog("info", (caller(0))[3] . " : REST Client already initialized");
@@ -510,7 +533,11 @@ sub freenas_iscsi_create_extent {
 
     my $name = $lun_path;
     $name  =~ s/^.*\///; # all from last /
-    $name  = $scfg->{'pool'} . ($product_name eq "TrueNAS-SCALE" ? '-' : '/') . $name;
+    my $pool = $scfg->{'pool'};
+    if ($product_name eq "TrueNAS-SCALE") {
+        $pool =~ s/\//-/g;
+    }
+    $name  = $pool . ($product_name eq "TrueNAS-SCALE" ? '-' : '/') . $name;
 
     my $device = $lun_path;
     $device =~ s/^\/dev\///; # strip /dev/
@@ -677,7 +704,7 @@ sub freenas_list_lu {
     my $targets   = freenas_iscsi_get_target($scfg);
     my $target_id = freenas_get_targetid($scfg);
 
-    my @luns        = ();
+    my %lun_hash;
     my $iscsi_lunid = undef;
 
     if(defined($target_id)) {
@@ -689,21 +716,21 @@ sub freenas_list_lu {
                 foreach my $node (@$extents) {
                     if($node->{'id'} == $item->{$freenas_api_variables->{'extentid'}}) {
                         if ($item->{$freenas_api_variables->{'lunid'}} =~ /(\d+)/) {
-                            $iscsi_lunid = "$1";
+                            if (defined($node)) {
+                                $node->{$freenas_api_variables->{'lunid'}} .= "$1";
+                                $lun_hash{$node->{$freenas_api_variables->{'extentpath'}}} = $node;
+                            }
+                            last;
                         } else {
-                            syslog("info", (caller(0))[3] . " : iscsi_lunid did not pass tainted testing");
-                            next;
+                            syslog("warn", (caller(0))[3] . " : iscsi_lunid did not pass tainted testing");
                         }
-                        $node->{$freenas_api_variables->{'lunid'}} .= $iscsi_lunid;
-                        push(@luns , $node);
-                        last;
                     }
                 }
             }
         }
     }
     syslog("info", (caller(0))[3] . " : successful");
-    return \@luns;
+    return \%lun_hash;
 }
 
 #
