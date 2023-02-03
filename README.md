@@ -103,3 +103,5 @@ You will still need to configure the SSH connector for listing the ZFS Pools bec
 3. Add your new TrueNAS ZFS-over-iSCSI storage using the TrueNAS-API.
 
 4. Thanks for your support.
+
+5. Writting guide <a href='https://xinux.net/index.php/Proxmox_iscsi_over_zfs_with_freenas'>Guide!!</a>
