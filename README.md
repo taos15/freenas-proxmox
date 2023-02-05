@@ -104,4 +104,4 @@ You will still need to configure the SSH connector for listing the ZFS Pools bec
 
 4. Thanks for your support.
 
-5. <a href='https://xinux.net/index.php/Proxmox_iscsi_over_zfs_with_freenas'>Writing Guide!!</a>
+5. <a href='https://xinux.net/index.php/Proxmox_iscsi_over_zfs_with_freenas'>Writing Guide!!</a>, you IQN can be found in the <span>Target Global COnfiguraion<span/> of the iscsi configuration wizard
